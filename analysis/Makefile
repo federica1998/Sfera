@@ -1,14 +1,15 @@
+
 CC = g++
 CFLAGS = -Wall -c -g -fpermissive 
 
 
-INCLUDES = -I. -I.. -I$(ROOTSYS)/include -I$(ROOFIT_INCLUDE)/ 
+INCLUDES = -I. -I.. -I$(ROOTSYS)/include
 
 ROOTSYS ?= ERROR_RootSysIsNotDefined
 
 ROOTFLAG = `${ROOTSYS}/bin/root-config --cflags --libs`
 
-EXTRALIBS := -L$(ROOTSYS)/lib -L$(ROOFIT_LIBDIR)/ -lHtml -lMathCore -lGenVector -lMinuit -lEG  -lPhysics -lz -lTreePlayer -lRooFitCore -lRooFit
+EXTRALIBS := -L$(ROOTSYS)/lib -lMinuit 
 
 
 asciiToTree: asciiToTree.cpp 
@@ -23,12 +24,15 @@ checkPulseShape: checkPulseShape.cpp
 makeSpectrum: makeSpectrum.cpp
 	$(CC) -Wall $(INCLUDES) -o makeSpectrum makeSpectrum.cpp $(ROOTFLAG) $(EXTRALIBS)
 
+measFromPShape: measFromPShape.cpp
+	$(CC) -Wall $(INCLUDES) -o measFromPShape measFromPShape.cpp $(ROOTFLAG) $(EXTRALIBS)
 
 
-all: asciiToTree checkPulseShape measToTree makeSpectrum
+
+all: asciiToTree checkPulseShape measToTree makeSpectrum measFromPShape 
 
 
 clean:
-	rm asciiToTree checkPulseShape measToTree makeSpectrum
+	rm asciiToTree checkPulseShape measToTree makeSpectrum measFromPShape 
 
 

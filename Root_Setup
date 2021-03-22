@@ -1,0 +1,17 @@
+da home directory fare 
+
+vim .bashrc e inserire questo
+
+export ROOTSYS=/usr/
+export LD_LIBRARY_PATH=${ROOTSYS}/lib
+export PATH=${PATH}:${ROOTSYS}/bin
+
+poi prendere il Makefile che sta su git e funziona
+
+
+
+
+
+(NON SERVE MA ME LO VOGLIO TENERE ) `${ROOTSYS}/bin/root-config --cflags --libs`
+
+
