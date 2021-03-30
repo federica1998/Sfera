@@ -1,13 +1,51 @@
 #include <iostream>
 #include <stdlib.h>
+#include <vector>
 
 #include "TFile.h"
 #include "TTree.h"
 #include "TH1D.h"
 #include "TGraph.h"
+#include "TH1F.h"
 #include "TCanvas.h"
 #include "TAxis.h"
 
+
+float purify (std::vector<float> vec){
+  
+  //std::cout << "... purify ..." << std::endl;
+
+  int N = vec.size();
+  float mean = 0., sd = 0.;
+  float N_S = 5.;
+  
+  for (unsigned int i = 0; i < N ; i++ ){
+    mean += vec[i];
+    sd += vec[i] * vec[i];
+  }
+
+  mean /= N;
+  sd =  sd/N - mean * mean;
+
+  //std::cout << " mean = " << mean << "\t sd = " << sd << std::endl;
+
+  float new_mean = mean * N;
+  int Nereased = 0;
+  
+  for (unsigned int j = 0; j < N ; j++ ){
+
+    if ( abs(vec[j] - mean )/sd > N_S){
+      new_mean -= vec[j];
+      Nereased++;
+      //std::cout << "removed : " << vec[j] << std::endl;
+    }
+  }
+  
+  new_mean /= (N - Nereased);
+  //std::cout << " new_mean = " << new_mean << std::endl;
+  
+  return new_mean ;
+}
 
 
 
@@ -43,84 +81,101 @@ int main( int argc, char* argv[] ) {
   tree->SetBranchAddress( "vcharge" , &vcharge );
   tree->SetBranchAddress( "pshape", &pshape );
 
-  int k = 0;
-  int NBASE = 100;
+  int NBASE = 70;
   int NEV = tree->GetEntries();
   
-  tree->GetEntry(3);
+  tree->GetEntry(0);
   std::cout << " Analizing " << nch << " channels and "<< NEV << " events..." << std::endl;
-  
-  float check_base[nch * NEV], dig_base[nch * NEV];
-  float check_vamp[nch * NEV], dig_vamp[nch * NEV];
-  float check_vcharge[nch * NEV], dig_vcharge[nch * NEV];
 
-  float sumB, sumC, maxV;
-
+  std::vector<float> vcheck_base;
+  float check_vamp, check_vcharge, check_base;
+  float K = 0.0202904;
+  int NBINS = 100;
   
+
+  TH1F* hBase = new TH1F("baseline", "", NBINS ,-0.004 , 0.004);
+  TH1F* hVamp = new TH1F("ampiezza", "", NBINS ,-0.01 , 0.01);
+  TH1F* hCharge = new TH1F("carica", "", NBINS ,-0.5, 0.5);
+
   for( unsigned e =0; e < NEV; ++e ) { // sum over events
     
-    std::cout << "Analizing the event " << e + 1 <<  " of " << NEV << std::endl;
-
-    k = e ;  
+    if ( (e+1 % 100) == 0) std::cout << "Analizing the event " << e + 1 <<  " of " << NEV << std::endl;
+    //if (e > 1 ) break;
+   
     tree->GetEntry(e);
 
     for (unsigned ch = 0 ; ch < nch; ch++){
       
-      sumB = 0.;
-      maxV = 0.;
-      sumC = 0.;
+      if (ch == 11 ) continue;
+
+      check_vamp = 0.;
+      check_vcharge = 0.;
 
       for( unsigned i=0; i < 1024; ++i ){ 
 
         //baseline
         if ( i <= NBASE){ 
-        
-         sumB += pshape[ch][i] ;
-
+          vcheck_base.push_back(pshape[ch][i]);
         }
 
         //amplitude
-        if (abs(pshape[ch][i]) > abs(maxV)){
-          maxV = pshape[ch][i];
+        if (abs(pshape[ch][i]) > abs(check_vamp)){
+          check_vamp = pshape[ch][i];
         }
 
         //charge
-         sumC += pshape[ch][i];
+        check_vcharge += pshape[ch][i];
 
       } //all points (1024)
       
       
-      sumB /= NBASE;
-      check_base[k*nch + ch] = sumB;
-      dig_base[k*nch + ch] = base[ch];
+      check_base = purify(vcheck_base);
+      hBase->Fill(check_base - base[ch]);
+      vcheck_base.clear();
       //std::cout << " my base = " << sumB << "\t dig = " << base[ch] << std:: endl;
-      check_vcharge[k*nch + ch] = sumC ;
-      //- sumB * 1024;
-      dig_vcharge[k*nch + ch] = vcharge[ch];
+      
+      check_vcharge -=  base[ch] * 1024;
+      hCharge->Fill( (check_vcharge / K - vcharge[ch])/vcharge[ch]);
       //std::cout << " my charge = " <<  check_vcharge[k*nch + ch] << "\t dig = " << vcharge[ch] << std:: endl;
-      check_vamp[k*nch + ch] = maxV;
-      dig_vamp[k*nch + ch] = vamp[ch];
+     
+      check_vamp -= check_base;
+      hVamp->Fill(check_vamp - vamp[ch]);
       //std::cout << " my amp = " <<  check_vamp[k*nch + ch] << "\t dig = " << vamp[ch] << std:: endl;
+    
 
+    }// for all channels
+  } // for events
 
-  }// for all channels
-} // for events
+  TAxis* xaxis = hBase->GetXaxis();
+  TAxis* yaxis = hBase->GetYaxis();
+  float dim = 0.02;
 
-  TGraph* Gbase = new TGraph(NEV * nch, dig_base, check_base);
-  Gbase->SetTitle("CONFRONTO DELLE BASELINE");
-  Gbase->GetXaxis()->SetTitle("base (digitzer) [V]");
-  Gbase->GetYaxis()->SetTitle("base [V]");
-  TGraph* Gamp = new TGraph(NEV * nch, dig_vamp, check_vamp);
-  Gamp->Fit("pol1");
-  Gamp->SetTitle("CONFRONTO DELLE AMPIEZZE");
-  Gamp->GetXaxis()->SetTitle("amp (digitzer)");
-  Gamp->GetYaxis()->SetTitle("amp [V] ");
-  TGraph* Gcharge = new TGraph(NEV * nch, dig_vcharge, check_vcharge);
-  Gcharge->Fit("pol1");
-  Gcharge->SetTitle("CONFRONTO DELLE CHARCHE");
-  Gcharge->GetXaxis()->SetTitle("charge (digitzer) [nC]");
-  Gcharge->GetYaxis()->SetTitle("charge [?] ");
+  //c1->SetLogy();
+
+  xaxis->SetTitle("baseline ([calcolata] - [digitizer])");
+  yaxis->SetTitle("counts");
+  xaxis->SetLabelSize(dim);
+  yaxis->SetLabelSize(dim);
+  //hBase->Fit("gaus");
+
+  xaxis = hVamp->GetXaxis();
+  yaxis = hVamp->GetYaxis();
+  xaxis->SetTitle("amplitude ( [calcolata] - [digitizer] )");
+  yaxis->SetTitle("counts");
+  xaxis->SetLabelSize(dim);
+  yaxis->SetLabelSize(dim);
+  //hVamp->Fit("gaus");
   
+  xaxis = hCharge->GetXaxis();
+  yaxis = hCharge->GetYaxis();
+  xaxis->SetTitle("carica ([calcolata] - [digitizer])/ [digitizer]");
+  yaxis->SetTitle("counts");
+  xaxis->SetLabelSize(dim);
+  yaxis->SetLabelSize(dim);
+  std::cout << "K : " << hCharge->GetMean() + 1. << std::endl;
+  //hCharge->Fit("gaus");
+  
+
   size_t pos = 0;
   std::string prefix;
   if((pos = fileName.find(".")) != std::string::npos) {
@@ -130,12 +185,13 @@ int main( int argc, char* argv[] ) {
   std::string plotsDir(Form("check_plots/%s", prefix.c_str()));
   system( Form("mkdir -p %s", plotsDir.c_str()) );
 
-  Gbase->Draw("A*");
-  c1->SaveAs(Form("%s/baseline.pdf",plotsDir.c_str()));
-  Gamp->Draw("A*");
-  c1->SaveAs(Form("%s/amplitude.pdf",plotsDir.c_str()));  
-  Gcharge->Draw("A*");
-  c1->SaveAs(Form("%s/charge.pdf",plotsDir.c_str()));
+  
+  hBase->Draw();
+  c1->SaveAs(Form("%s/baseline_diff.pdf",plotsDir.c_str()));
+  hVamp->Draw();
+  c1->SaveAs(Form("%s/amplitudes_diff.pdf",plotsDir.c_str()));
+  hCharge->Draw();
+  c1->SaveAs(Form("%s/charge_diff.pdf",plotsDir.c_str()));
 
 
   return 0;
